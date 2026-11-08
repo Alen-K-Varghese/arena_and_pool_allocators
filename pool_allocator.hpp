@@ -35,17 +35,22 @@ class pool_alloc{
 
         if(ret){ m_head.next = m_head.next->next; }
         else   { ret = m_arena.allocate(node_size, alignment); }
-        
+
         return ret;
     };
 
+    void deallocate(void_pointer ptr, size_type){
+        m_head.next = new (ptr) free_list(m_head.next);
+    }
 
     ~pool_alloc(){
         m_arena.destroy();
     }
 
     private:
-    arena_alloc<pool_size> m_arena;
+
+    static internal::arena_impl<pool_size> m_arena{};
+
     free_list m_head{ nullptr };
 
 };

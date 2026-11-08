@@ -3,6 +3,7 @@
 #include "base.hpp"
 #include <atomic>
 #include <cstddef>
+#include <cstdint>
 #include <sys/mman.h>
 namespace memory {
 namespace internal {
@@ -31,7 +32,7 @@ class arena_impl{
         current_     = buffer_head_;
         buffer_end_  = buffer_head_ + arena_size;
 
-        mprotect(buffer_end_ + 1, KiB_4, PROT_NONE);
+        mprotect(buffer_end_ , KiB_4, PROT_NONE);
     }
 
 
@@ -69,7 +70,7 @@ class arena_impl{
     }
 
 
-    void deallocate(const size_type size, const void_pointer ptr){
+    void deallocate(const void_pointer ptr, const size_type size){
         pointer predicted = static_cast<pointer>(ptr) + size;
 
         if(predicted == current_){ current_ -= size; }
@@ -79,19 +80,20 @@ class arena_impl{
     _inline void clear(){ current_ = buffer_head_; }
 
     void destroy(){
-        munmap(static_cast<void_pointer>(buffer_head_), (buffer_end_ - buffer_end_) + (KiB_4));
+        munmap(static_cast<void_pointer>(buffer_head_), (buffer_end_ - buffer_head_) + (KiB_4));
     }
 
     private:
     _inline void 
     align_as(const size_type alignment){
         current_ = reinterpret_cast<pointer>(
-            (reinterpret_cast<uintptr_t>(current_) + alignment - 1) & ~(alignment - 1)
+            (reinterpret_cast<uintptr_t>(current_) + alignment - 1) & 
+            ~static_cast<uintptr_t>(alignment - 1)
         );
     }
 
     _inline bool 
-    is_pow2(const size_type value){ return (((value) & (value + 1)) == 0); }
+    is_pow2(const size_type value){ return (((value) & (value - 1)) == 0); }
 
     private:
     _inline void incr_ref() { m_ref_count.fetch_add(1); }
@@ -107,12 +109,12 @@ class arena_impl{
 };
 } // namespace internal
 
-template<internal::arena_impl<>::size_type arena_size>
+template<typename dtype, internal::arena_impl<>::size_type arena_size>
 class arena_alloc{
     public:
-    using value_type      = internal::arena_impl<>::value_type;
-    using pointer         = internal::arena_impl<>::pointer;
-    using const_pointer   = internal::arena_impl<>::const_pointer;
+    using value_type      = dtype;
+    using pointer         = value_type *;
+    using const_pointer   = const value_type *;
     using void_pointer    = internal::arena_impl<>::void_pointer;
     using size_type       = internal::arena_impl<>::size_type;
     using const_size_type = internal::arena_impl<>::const_size_type;
@@ -120,7 +122,7 @@ class arena_alloc{
 
     public:
     arena_alloc(){
-        m_arena = new arena_alloc<arena_size>;
+        m_arena = new internal::arena_impl<arena_size>;
         m_arena->incr_ref();
     }
 
@@ -136,16 +138,16 @@ class arena_alloc{
     arena_alloc operator= (arena_alloc&& other) = delete;
 
 
-    _inline void_pointer allocate(const size_type size, const size_type alignment){
-        return m_arena->allocate(size, alignment);
+    _inline pointer allocate(const size_type size, const size_type alignment){
+        return static_cast<pointer>( m_arena->allocate(size, alignment) );
     }
 
-    _inline void_pointer unsafe_alloc(const size_type size, const size_type alignment){
-        return m_arena->unsafe_alloc(size, alignment);
+    _inline pointer unsafe_alloc(const size_type size, const size_type alignment){
+        return static_cast<pointer>( m_arena->unsafe_alloc(size, alignment) );
     }
 
-    _inline void deallocate(const size_type size, const void_pointer ptr){
-        m_arena->deallocate(size, ptr);
+    _inline void deallocate(const pointer ptr, const size_type size){
+        m_arena->deallocate(static_cast<void_pointer>(ptr), size);
     }
 
     ~arena_alloc(){
