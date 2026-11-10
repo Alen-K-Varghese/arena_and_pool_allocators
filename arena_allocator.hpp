@@ -132,27 +132,38 @@ class arena_alloc{
 
         m_arena->incr_ref();
     }
-    arena_alloc operator= (arena_alloc const& other){  }
+
+    arena_alloc& operator= (arena_alloc const& other){
+
+        if(&other == this){ return *this; }
+
+        if(other.m_arena == nullptr){ throw "null init error"; }
+
+        if(m_arena != nullptr){ m_arena->decr_ref(); }
+        
+        m_arena = other.m_arena;
+        m_arena->incr_ref();
+
+        return *this;
+    }
     
     arena_alloc           (arena_alloc&& other) = delete;
     arena_alloc operator= (arena_alloc&& other) = delete;
 
 
-    _inline pointer allocate(const size_type size, const size_type alignment){
-        return static_cast<pointer>( m_arena->allocate(size, alignment) );
+    _inline pointer allocate(const size_type size, const size_type){
+        return static_cast<pointer>( m_arena->allocate(size*sizeof(dtype), alignof(dtype)) );
     }
 
-    _inline pointer unsafe_alloc(const size_type size, const size_type alignment){
-        return static_cast<pointer>( m_arena->unsafe_alloc(size, alignment) );
+    _inline pointer unsafe_alloc(const size_type size, const size_type){
+        return static_cast<pointer>( m_arena->unsafe_alloc(size*sizeof(dtype), alignof(dtype)) );
     }
 
     _inline void deallocate(const pointer ptr, const size_type size){
         m_arena->deallocate(static_cast<void_pointer>(ptr), size);
     }
 
-    ~arena_alloc(){
-        destroy();
-    }
+    ~arena_alloc(){ destroy(); }
 
     void destroy(){
         m_arena->decr_ref();
@@ -162,11 +173,9 @@ class arena_alloc{
         }
     }
 
-
     private:
-    internal::arena_impl<arena_size> *m_arena;
+    internal::arena_impl<arena_size> *m_arena{nullptr};
     
-
 };
 
 
