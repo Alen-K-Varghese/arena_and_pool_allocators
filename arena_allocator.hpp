@@ -168,9 +168,7 @@ class arena_alloc{
     void destroy(){
         m_arena->decr_ref();
 
-        if(m_arena->zero_ref()){
-            delete m_arena;
-        }
+        if(m_arena->zero_ref()){ delete m_arena; }
     }
 
     private:
